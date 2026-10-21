@@ -37,13 +37,24 @@ class World:
         else:
             self.env = gym.make(env_id, **kw)
         self.names = [getattr(a, "name", str(a)) for a in self.env.unwrapped.actions]
-        obs, info = self.env.reset(seed=int(seed))
+        obs, info = self._reset(seed)
         self.p = Perceiver(obs["chars"])
         per = self.p.perceive(obs)
         return {"cells": self.p.cells(), "size": [self.p.w, self.p.h], "actions": self.names, "init": per}
 
+    def _reset(self, seed):
+        """A deterministic episode: NLE's own seeding (core, disp, reseed=False) before the reset —
+        gymnasium's reset(seed) alone does not pin NetHack's RNG, so a replay diverged."""
+        u = self.env.unwrapped
+        if hasattr(u, "seed"):
+            try:
+                u.seed(int(seed), int(seed), False)
+            except TypeError:
+                u.seed(core=int(seed), disp=int(seed), reseed=False)
+        return self.env.reset()
+
     def reset(self, seed=1):
-        obs, info = self.env.reset(seed=int(seed))
+        obs, info = self._reset(seed)
         self.p.seen_traps = {}
         out = self.p.perceive(obs)
         out.update({"done": False, "won": False, "reward": 0.0})
